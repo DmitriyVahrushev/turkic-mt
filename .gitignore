@@ -207,3 +207,6 @@ marimo/_lsp/
 __marimo__/
 data/
 hf_data/
+*.csv
+*.parquet
+checkpoints/

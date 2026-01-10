@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-NLLB-200-3.3B Inference Script
-Translates Russian text to Bashkir using facebook/nllb-200-3.3B model.
-Supports both base model and finetuned checkpoints.
+NLLB Evaluation Script
+Evaluates NLLB model on validation samples and computes ChrF++ metric.
 """
 
 import argparse
@@ -11,6 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+import sacrebleu
 
 # Set HF cache directory
 os.environ["HF_HOME"] = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data"
@@ -21,21 +21,35 @@ SRC_LANG = "rus_Cyrl"  # Russian
 TGT_LANG = "bak_Cyrl"  # Bashkir
 
 # File paths
-INPUT_FILE = "test.csv"
-OUTPUT_FILE = "submission.csv"
+VALID_FILE = "data/valid.parquet"
 
-# Batch size for inference (adjust based on GPU memory)
+# Evaluation settings
+NUM_SAMPLES = 1000
 BATCH_SIZE = 8
-MAX_LENGTH = 4096
+MAX_LENGTH = 1024
+NUM_BEAMS = 5
+SEED = 42
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="NLLB Russian to Bashkir translation")
+    parser = argparse.ArgumentParser(description="Evaluate NLLB model on validation set")
     parser.add_argument(
         "--model-path",
         type=str,
         default=None,
         help="Path to finetuned model checkpoint. If not specified, uses base model."
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=NUM_SAMPLES,
+        help=f"Number of samples to evaluate (default: {NUM_SAMPLES})"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=BATCH_SIZE,
+        help=f"Batch size for inference (default: {BATCH_SIZE})"
     )
     return parser.parse_args()
 
@@ -75,8 +89,8 @@ def translate_batch(texts, model, tokenizer):
         outputs = model.generate(
             **inputs,
             forced_bos_token_id=forced_bos_token_id,
-            max_length=MAX_LENGTH,
-            num_beams=5,
+            max_new_tokens=MAX_LENGTH,
+            num_beams=NUM_BEAMS,
             early_stopping=True
         )
 
@@ -90,34 +104,47 @@ def main():
     # Determine model path
     model_path = args.model_path if args.model_path else BASE_MODEL
 
-    # Load the data
-    print(f"Loading data from {INPUT_FILE}")
-    df = pd.read_csv(INPUT_FILE)
-    print(f"Loaded {len(df)} rows")
+    # Load validation data
+    print(f"Loading validation data from {VALID_FILE}")
+    df = pd.read_parquet(VALID_FILE)
+    print(f"Total validation samples: {len(df):,}")
+
+    # Select first N samples (same as training script subset)
+    df_subset = df.head(args.num_samples)
+    print(f"Evaluating on {len(df_subset):,} samples")
 
     # Load model
     model, tokenizer = load_model(model_path)
 
     # Translate in batches
-    translations = []
-    texts = df["source_ru"].tolist()
+    predictions = []
+    source_texts = df_subset["ru"].tolist()
+    reference_texts = df_subset["ba"].tolist()
 
     print("Starting translation...")
-    for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="Translating"):
-        batch = texts[i:i + BATCH_SIZE]
+    for i in tqdm(range(0, len(source_texts), args.batch_size), desc="Translating"):
+        batch = source_texts[i:i + args.batch_size]
         batch_translations = translate_batch(batch, model, tokenizer)
-        translations.extend(batch_translations)
+        predictions.extend(batch_translations)
 
-    # Create output dataframe
-    output_df = pd.DataFrame({
-        "id": df["id"],
-        "submission": translations
-    })
+    # Compute ChrF++
+    chrf = sacrebleu.corpus_chrf(predictions, [reference_texts], word_order=2)
 
-    # Save results
-    output_df.to_csv(OUTPUT_FILE, index=False)
-    print(f"Results saved to {OUTPUT_FILE}")
-    print(f"Total translations: {len(output_df)}")
+    print("\n" + "=" * 50)
+    print("EVALUATION RESULTS")
+    print("=" * 50)
+    print(f"Model: {model_path}")
+    print(f"Samples: {len(predictions)}")
+    print(f"ChrF++: {chrf.score:.2f}")
+    print("=" * 50)
+
+    # Show some examples
+    print("\nSample translations:")
+    for i in range(min(5, len(predictions))):
+        print(f"\n[{i+1}]")
+        print(f"  Source (RU): {source_texts[i][:100]}...")
+        print(f"  Reference (BA): {reference_texts[i][:100]}...")
+        print(f"  Prediction: {predictions[i][:100]}...")
 
 
 if __name__ == "__main__":
