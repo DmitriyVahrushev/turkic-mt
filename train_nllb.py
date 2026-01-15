@@ -28,14 +28,9 @@ from transformers import (
 )
 import sacrebleu
 
-# ============================================================================
-# Configuration
-# ============================================================================
 
-# Environment
-os.environ["HF_HOME"] = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data"
+os.environ["NCCL_TIMEOUT"] = "3600"
 
-# Model
 MODEL_NAME = "facebook/nllb-200-3.3B"
 SRC_LANG = "rus_Cyrl"  # Russian
 TGT_LANG = "bak_Cyrl"  # Bashkir
@@ -45,31 +40,26 @@ TRAIN_FILE = "data/train.parquet"
 VALID_FILE = "data/valid.parquet"
 
 # Training hyperparameters
-BATCH_SIZE = 8  # Per GPU
-GRADIENT_ACCUMULATION_STEPS = 2  # Effective batch = 8 * 8 * 2 = 128
-LEARNING_RATE = 2e-5
+BATCH_SIZE = 4 * 8  # Per GPU
+GRADIENT_ACCUMULATION_STEPS = 2
+LEARNING_RATE = 4 * 2e-5
 WEIGHT_DECAY = 0.01
-WARMUP_STEPS = 1000
-NUM_EPOCHS = 3
-MAX_SEQ_LENGTH = 256
+WARMUP_STEPS = 4 * 1000
+NUM_EPOCHS = 5
+MAX_SEQ_LENGTH = 512
 GRADIENT_CLIP = 1.0
 
 # Evaluation
-EVAL_STEPS = 5000  # Evaluate every N steps
+EVAL_STEPS = 500  # Evaluate every N steps
 EVAL_SUBSET_SIZE = 1000  # Subset for step-wise evaluation
 NUM_BEAMS = 5
 
-# Checkpointing
 CHECKPOINT_DIR = "checkpoints"
 LOG_DIR = "runs"
 
 # Random seed
 SEED = 42
 
-
-# ============================================================================
-# Dataset
-# ============================================================================
 
 class TranslationDataset(Dataset):
     """Dataset for Russian-Bashkir translation."""
@@ -152,10 +142,6 @@ class DataCollator:
         }
 
 
-# ============================================================================
-# Evaluation
-# ============================================================================
-
 def evaluate_chrf(
     model,
     tokenizer,
@@ -226,10 +212,6 @@ def evaluate_chrf(
         "num_samples": len(predictions),
     }
 
-
-# ============================================================================
-# Training
-# ============================================================================
 
 def set_seed(seed: int):
     """Set random seed for reproducibility."""
@@ -445,28 +427,38 @@ def train():
                         writer.add_scalar("eval_subset/chrf++", eval_results["chrf++"], global_step)
                         writer.add_scalar("eval_subset/loss", eval_results["loss"], global_step)
 
-        # End of epoch evaluation (full validation set)
+        # End of epoch evaluation
         dist.barrier()
 
         if is_main_process():
             avg_epoch_loss = epoch_loss / len(train_loader)
             print(f"\nEpoch {epoch + 1} completed. Avg train loss: {avg_epoch_loss:.4f}")
-            print("Running full validation...")
+            print(f"Running validation on {EVAL_SUBSET_SIZE} samples...")
+
+            # Create subset loader for evaluation
+            subset_indices = list(range(min(EVAL_SUBSET_SIZE, len(valid_dataset))))
+            subset = torch.utils.data.Subset(valid_dataset, subset_indices)
+            eval_loader = DataLoader(
+                subset,
+                batch_size=BATCH_SIZE,
+                collate_fn=collator,
+                num_workers=2,
+            )
 
             eval_results = evaluate_chrf(
                 model.module,
                 tokenizer,
-                valid_loader,
+                eval_loader,
                 device,
                 num_beams=NUM_BEAMS,
             )
 
-            print(f"  Full Valid ChrF++: {eval_results['chrf++']:.2f}")
-            print(f"  Full Valid Loss: {eval_results['loss']:.4f}")
+            print(f"  Valid ChrF++: {eval_results['chrf++']:.2f}")
+            print(f"  Valid Loss: {eval_results['loss']:.4f}")
 
             if writer:
-                writer.add_scalar("eval_full/chrf++", eval_results["chrf++"], global_step)
-                writer.add_scalar("eval_full/loss", eval_results["loss"], global_step)
+                writer.add_scalar("eval/chrf++", eval_results["chrf++"], global_step)
+                writer.add_scalar("eval/loss", eval_results["loss"], global_step)
                 writer.add_scalar("train/epoch_loss", avg_epoch_loss, epoch + 1)
 
             # Save checkpoint
