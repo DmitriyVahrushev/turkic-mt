@@ -12,8 +12,6 @@ import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 import sacrebleu
 
-# Set HF cache directory
-os.environ["HF_HOME"] = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data"
 
 # Model configuration
 BASE_MODEL = "google/madlad400-10b-mt"

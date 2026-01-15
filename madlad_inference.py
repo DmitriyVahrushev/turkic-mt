@@ -10,8 +10,6 @@ from tqdm import tqdm
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-# Set HF cache directory
-os.environ["HF_HOME"] = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data"
 
 # Model configuration
 MODEL_NAME = "google/madlad400-10b-mt"

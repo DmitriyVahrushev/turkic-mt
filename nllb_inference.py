@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-NLLB-200-3.3B Inference Script
-Translates Russian text to Bashkir using facebook/nllb-200-3.3B model.
-Supports both base model and finetuned checkpoints.
-"""
-
 import argparse
 import os
 import pandas as pd
@@ -12,21 +5,17 @@ from tqdm import tqdm
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-# Set HF cache directory
-os.environ["HF_HOME"] = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data"
 
 # Model configuration
 BASE_MODEL = "facebook/nllb-200-3.3B"
 SRC_LANG = "rus_Cyrl"  # Russian
 TGT_LANG = "bak_Cyrl"  # Bashkir
 
-# File paths
 INPUT_FILE = "test.csv"
-OUTPUT_FILE = "submission.csv"
+OUTPUT_FILE = "submission-3epoch-256maxlen.csv"
 
-# Batch size for inference (adjust based on GPU memory)
 BATCH_SIZE = 8
-MAX_LENGTH = 4096
+MAX_LENGTH = 2048
 
 
 def parse_args():
