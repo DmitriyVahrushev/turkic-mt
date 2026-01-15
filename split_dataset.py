@@ -9,7 +9,7 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-# Split configuration
+
 TRAIN_RATIO = 0.95
 VALID_RATIO = 0.05
 RANDOM_SEED = 42

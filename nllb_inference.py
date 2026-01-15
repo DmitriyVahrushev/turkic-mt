@@ -86,35 +86,23 @@ def translate_batch(texts, model, tokenizer):
 
 def main():
     args = parse_args()
-
-    # Determine model path
     model_path = args.model_path if args.model_path else BASE_MODEL
 
-    # Load the data
-    print(f"Loading data from {INPUT_FILE}")
     df = pd.read_csv(INPUT_FILE)
-    print(f"Loaded {len(df)} rows")
-
-    # Load model
     model, tokenizer = load_model(model_path)
-
-    # Translate in batches
     translations = []
     texts = df["source_ru"].tolist()
 
-    print("Starting translation...")
     for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="Translating"):
         batch = texts[i:i + BATCH_SIZE]
         batch_translations = translate_batch(batch, model, tokenizer)
         translations.extend(batch_translations)
 
-    # Create output dataframe
     output_df = pd.DataFrame({
         "id": df["id"],
         "submission": translations
     })
 
-    # Save results
     output_df.to_csv(OUTPUT_FILE, index=False)
     print(f"Results saved to {OUTPUT_FILE}")
     print(f"Total translations: {len(output_df)}")

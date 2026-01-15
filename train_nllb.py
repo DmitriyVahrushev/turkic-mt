@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-"""
-NLLB-200-3.3B Full Finetuning Script
-Russian → Bashkir translation with DDP training.
-
-Launch with:
-    torchrun --nproc_per_node=8 train_nllb.py
-"""
-
 import os
 import math
 import random
@@ -40,11 +31,11 @@ TRAIN_FILE = "data/train.parquet"
 VALID_FILE = "data/valid.parquet"
 
 # Training hyperparameters
-BATCH_SIZE = 4 * 8  # Per GPU
+BATCH_SIZE = 32
 GRADIENT_ACCUMULATION_STEPS = 2
-LEARNING_RATE = 4 * 2e-5
+LEARNING_RATE = 8e-5
 WEIGHT_DECAY = 0.01
-WARMUP_STEPS = 4 * 1000
+WARMUP_STEPS = 4000
 NUM_EPOCHS = 5
 MAX_SEQ_LENGTH = 512
 GRADIENT_CLIP = 1.0
@@ -57,7 +48,6 @@ NUM_BEAMS = 5
 CHECKPOINT_DIR = "checkpoints"
 LOG_DIR = "runs"
 
-# Random seed
 SEED = 42
 
 
@@ -324,14 +314,12 @@ def train():
         pin_memory=True,
     )
 
-    # Optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=LEARNING_RATE,
         weight_decay=WEIGHT_DECAY,
     )
 
-    # Scheduler
     total_steps = (len(train_loader) // GRADIENT_ACCUMULATION_STEPS) * NUM_EPOCHS
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
@@ -345,7 +333,6 @@ def train():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         writer = SummaryWriter(os.path.join(LOG_DIR, f"nllb_finetune_{timestamp}"))
 
-    # Training loop
     global_step = 0
     best_chrf = 0.0
 
@@ -370,7 +357,6 @@ def train():
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
 
-            # Forward pass
             outputs = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -379,10 +365,8 @@ def train():
             loss = outputs.loss / GRADIENT_ACCUMULATION_STEPS
             epoch_loss += loss.item() * GRADIENT_ACCUMULATION_STEPS
 
-            # Backward pass
             loss.backward()
 
-            # Update weights
             if (step + 1) % GRADIENT_ACCUMULATION_STEPS == 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
                 optimizer.step()
@@ -395,10 +379,8 @@ def train():
                     writer.add_scalar("train/loss", loss.item() * GRADIENT_ACCUMULATION_STEPS, global_step)
                     writer.add_scalar("train/lr", scheduler.get_last_lr()[0], global_step)
 
-                # Update progress bar
                 progress_bar.set_postfix({"loss": f"{loss.item() * GRADIENT_ACCUMULATION_STEPS:.4f}"})
 
-                # Step-wise evaluation
                 if global_step % EVAL_STEPS == 0 and is_main_process():
                     print(f"\nStep {global_step}: Running evaluation on subset...")
 
@@ -420,12 +402,12 @@ def train():
                         num_beams=NUM_BEAMS,
                     )
 
-                    print(f"  Subset ChrF++: {eval_results['chrf++']:.2f}")
-                    print(f"  Subset Loss: {eval_results['loss']:.4f}")
+                    print(f"Subset ChrF++: {eval_results['chrf++']:.2f}")
+                    print(f"Subset Loss: {eval_results['loss']:.4f}")
 
                     if writer:
-                        writer.add_scalar("eval_subset/chrf++", eval_results["chrf++"], global_step)
-                        writer.add_scalar("eval_subset/loss", eval_results["loss"], global_step)
+                        writer.add_scalar("eval/chrf++", eval_results["chrf++"], global_step)
+                        writer.add_scalar("eval/loss", eval_results["loss"], global_step)
 
         # End of epoch evaluation
         dist.barrier()
@@ -453,8 +435,8 @@ def train():
                 num_beams=NUM_BEAMS,
             )
 
-            print(f"  Valid ChrF++: {eval_results['chrf++']:.2f}")
-            print(f"  Valid Loss: {eval_results['loss']:.4f}")
+            print(f"Valid ChrF++: {eval_results['chrf++']:.2f}")
+            print(f"Valid Loss: {eval_results['loss']:.4f}")
 
             if writer:
                 writer.add_scalar("eval/chrf++", eval_results["chrf++"], global_step)
