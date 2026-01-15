@@ -12,9 +12,6 @@ import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 import sacrebleu
 
-# Set HF cache directory
-os.environ["HF_HOME"] = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data"
-
 # Model configuration
 BASE_MODEL = "facebook/nllb-200-3.3B"
 SRC_LANG = "rus_Cyrl"  # Russian

@@ -4,15 +4,10 @@ Dataset Splitting Script
 Splits the Bashkir-Russian parallel corpus into train/validation sets (95/5).
 """
 
+import argparse
 import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
-
-# Paths
-SOURCE_PARQUET = "/home/ubuntu/dmitrii_projects/turkic-mt/hf_data/hub/datasets--AigizK--bashkir-russian-parallel-corpora/snapshots/0cddd5ffe7fffa8e23fd64a94a52429668513bbc/data/train-00000-of-00001.parquet"
-OUTPUT_DIR = "data"
-TRAIN_FILE = os.path.join(OUTPUT_DIR, "train.parquet")
-VALID_FILE = os.path.join(OUTPUT_DIR, "valid.parquet")
 
 # Split configuration
 TRAIN_RATIO = 0.95
@@ -20,13 +15,37 @@ VALID_RATIO = 0.05
 RANDOM_SEED = 42
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Split dataset into train/validation sets (95/5)."
+    )
+    parser.add_argument(
+        "--input", "-i",
+        type=str,
+        required=True,
+        help="Path to input parquet file"
+    )
+    parser.add_argument(
+        "--output-dir", "-o",
+        type=str,
+        default="data",
+        help="Output directory for train/valid parquet files (default: data)"
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
+    train_file = os.path.join(args.output_dir, "train.parquet")
+    valid_file = os.path.join(args.output_dir, "valid.parquet")
+
     # Create output directory
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Load data
-    print(f"Loading data from {SOURCE_PARQUET}")
-    df = pd.read_parquet(SOURCE_PARQUET)
+    print(f"Loading data from {args.input}")
+    df = pd.read_parquet(args.input)
     print(f"Total samples: {len(df):,}")
     print(f"Columns: {df.columns.tolist()}")
 
@@ -43,15 +62,15 @@ def main():
     print(f"Validation samples: {len(valid_df):,}")
 
     # Save splits
-    print(f"\nSaving train set to {TRAIN_FILE}")
-    train_df.to_parquet(TRAIN_FILE, index=False)
+    print(f"\nSaving train set to {train_file}")
+    train_df.to_parquet(train_file, index=False)
 
-    print(f"Saving validation set to {VALID_FILE}")
-    valid_df.to_parquet(VALID_FILE, index=False)
+    print(f"Saving validation set to {valid_file}")
+    valid_df.to_parquet(valid_file, index=False)
 
     print("\nDone!")
-    print(f"  Train: {TRAIN_FILE} ({len(train_df):,} samples)")
-    print(f"  Valid: {VALID_FILE} ({len(valid_df):,} samples)")
+    print(f"  Train: {train_file} ({len(train_df):,} samples)")
+    print(f"  Valid: {valid_file} ({len(valid_df):,} samples)")
 
 
 if __name__ == "__main__":
