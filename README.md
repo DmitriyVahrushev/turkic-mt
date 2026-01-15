@@ -22,13 +22,16 @@ torchrun --nproc_per_node=8 train_nllb.py
 # 4. Evaluate model on validation dataset
 python evaluate_nllb.py --model-path checkpoints/best_model
 
-# 5. Inference
+# 5. Inference (and preparition of submission file)
 python nllb_inference.py --model-path checkpoints/best_model
 ```
 
 ## Data
 
 Uses [AigizK/bashkir-russian-parallel-corpora](https://huggingface.co/datasets/AigizK/bashkir-russian-parallel-corpora) .
+
+## Weigths
+[finetuned nllb 200 3b weights](https://huggingface.co/DmitriyV/nllb-3.1b-ru-ba-finetuned)
 
 ## Evaluation
 
